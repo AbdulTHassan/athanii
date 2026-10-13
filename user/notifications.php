@@ -1,0 +1,7 @@
+<?php
+$pageTitle='Notifications'; require_once '_header.php';
+$userId=(int)$_SESSION['user_id']; if($_SERVER['REQUEST_METHOD']==='POST'){markNotificationsRead($userId);header('Location: notifications.php');exit;} $list=getNotifications($userId);
+?>
+<div class="max-w-4xl mx-auto"><div class="flex justify-between items-end mb-7"><div><h1 class="text-2xl font-bold">Notifications</h1><p class="text-slate-500 text-sm mt-1">Updates about your calculations, payments and account.</p></div><?php if($list):?><form method="POST"><button class="text-sm text-emerald-700 font-semibold">Mark all as read</button></form><?php endif;?></div>
+<div class="bg-white border rounded-2xl divide-y divide-slate-100"><?php if($list):foreach($list as $n):?><div class="p-5 flex gap-4 <?=!$n['is_read']?'bg-emerald-50/40':''?>"><span class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"><i class="fa-solid fa-bell"></i></span><div><p class="font-semibold"><?=e($n['title'])?> <?php if(!$n['is_read']):?><span class="ml-2 text-[10px] bg-emerald-700 text-white rounded-full px-2 py-0.5">NEW</span><?php endif;?></p><p class="text-sm text-slate-500 mt-1"><?=e($n['message'])?></p><p class="text-xs text-slate-400 mt-2"><?=date('M d, Y h:i A',strtotime($n['created_at']))?></p></div></div><?php endforeach;else:?><div class="p-12 text-center text-slate-500">You have no notifications.</div><?php endif;?></div></div>
+<?php require_once '_footer.php'; ?>

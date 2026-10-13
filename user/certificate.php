@@ -1,0 +1,16 @@
+<?php
+$pageTitle='Certificate'; require_once '_header.php';
+$userId=(int)$_SESSION['user_id'];$id=(int)($_GET['id']??0);
+$sql="SELECT c.*,p.id payment_id,p.status payment_status FROM zakat_calculations c JOIN zakat_payments p ON p.calculation_id=c.id AND p.user_id=c.user_id WHERE c.user_id=? AND c.status='approved' AND p.status='confirmed' AND (?=0 OR c.id=?) ORDER BY c.created_at DESC LIMIT 1";
+$st=$pdo->prepare($sql);$st->execute([$userId,$id,$id]);$c=$st->fetch(PDO::FETCH_ASSOC);
+$cert=null;
+if($c){$st=$pdo->prepare("SELECT * FROM certificates WHERE calculation_id=? AND user_id=? LIMIT 1");$st->execute([$c['id'],$userId]);$cert=$st->fetch(PDO::FETCH_ASSOC);
+ if(!$cert){$no='ZP-CERT-'.date('Ymd').'-'.strtoupper(bin2hex(random_bytes(3)));$st=$pdo->prepare("INSERT INTO certificates(user_id,calculation_id,payment_id,certificate_no) VALUES(?,?,?,?)");$st->execute([$userId,$c['id'],$c['payment_id'],$no]);$cert=['certificate_no'=>$no,'issued_at'=>date('Y-m-d H:i:s')];logActivity($userId,'certificate',$c['id'],'Certificate generated');}
+}
+?>
+<div class="max-w-4xl mx-auto"><div class="mb-7"><h1 class="text-2xl font-bold">Zakat Certificate</h1><p class="text-slate-500 text-sm mt-1">Your certificate becomes available only after approval and confirmed payment.</p></div>
+<?php if(!$c):?><div class="bg-white border rounded-2xl p-10 text-center"><span class="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto text-2xl"><i class="fa-solid fa-lock"></i></span><h2 class="font-bold text-xl mt-4">Certificate is locked</h2><p class="text-slate-500 max-w-md mx-auto mt-2">Complete the approval and payment process first. Once payment is confirmed, your certificate will be available here.</p><a href="status.php" class="inline-block mt-5 text-emerald-700 font-semibold">Check Zakat Status →</a></div>
+<?php else:?>
+<div class="bg-white border-4 border-emerald-700 p-8 sm:p-12 text-center shadow-sm"><div class="text-emerald-700 text-4xl"><i class="fa-solid fa-mosque"></i></div><p class="tracking-[.25em] text-xs mt-4 text-slate-500">ZAKATPRO</p><h2 class="text-3xl sm:text-4xl font-serif font-bold mt-3">Zakat Certificate</h2><p class="text-slate-500 mt-2">This certifies that the Zakat payment recorded under</p><h3 class="text-xl font-bold mt-5"><?=e($user['full_name'])?></h3><p class="text-sm text-slate-500 mt-2">Reference: <?=e($c['reference_no'])?></p><div class="my-7 border-y py-5"><p class="text-sm text-slate-500">Confirmed Zakat Amount</p><p class="text-3xl font-bold text-emerald-700"><?=money($c['zakat_due'])?></p></div><div class="flex justify-center gap-8 text-sm"><div><p class="text-slate-400">Certificate No.</p><b><?=e($cert['certificate_no'])?></b></div><div><p class="text-slate-400">Issued</p><b><?=date('M d, Y',strtotime($cert['issued_at']))?></b></div></div><div class="mt-8 flex justify-center gap-3"><button onclick="window.print()" class="bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-semibold">Print Certificate</button><a href="donation.php" class="border px-5 py-2.5 rounded-xl font-semibold">Zakat Donation</a></div></div>
+<?php endif;?></div><style>@media print{aside,header,footer,.print-hidden{display:none!important}main{margin:0!important}.p-4{padding:0!important}}</style>
+<?php require_once '_footer.php'; ?>

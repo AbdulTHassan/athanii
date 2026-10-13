@@ -1,0 +1,110 @@
+/* ============================================================
+   ZAKKATPRO — Home Page Styles
+   Page-specific styles only. Global styles stay in app.css.
+============================================================ */
+
+:root {
+    --zakat-green: #047857;
+    --zakat-green-dark: #065f46;
+    --zakat-green-soft: #ecfdf5;
+}
+
+.hero-gradient {
+    background:
+        radial-gradient(circle at 82% 18%, rgba(16,185,129,.16), transparent 30%),
+        radial-gradient(circle at 8% 90%, rgba(200,155,60,.08), transparent 25%),
+        linear-gradient(135deg, #ecfdf5 0%, #ffffff 48%, #f0fdf4 100%);
+}
+
+.hero-slider-image, .slide {
+    transition: opacity .7s ease, transform 1s ease;
+}
+
+.slide.active { opacity: 1; transform: scale(1); }
+.slide.inactive { opacity: 0; transform: scale(1.05); }
+
+.soft-card {
+    border: 1px solid #e5e7eb;
+    background: rgba(255,255,255,.92);
+    transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+}
+
+.soft-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(16,185,129,.35);
+    box-shadow: 0 20px 45px rgba(15,23,42,.08);
+}
+
+.category-card { transition: transform .25s ease, box-shadow .25s ease; }
+.category-card:hover { transform: translateY(-5px); box-shadow: 0 18px 40px rgba(15,23,42,.09); }
+
+.btn-primary {
+    background: var(--zakat-green);
+    transition: background .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.btn-primary:hover {
+    background: var(--zakat-green-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 12px 25px rgba(4,120,87,.20);
+}
+
+.section-label { color: var(--zakat-green); background: var(--zakat-green-soft); }
+
+.step-line {
+    position: absolute;
+    top: 28px;
+    left: calc(50% + 32px);
+    right: calc(-50% + 32px);
+    height: 1px;
+    background: #d1fae5;
+}
+
+/* Keep the home page readable when the global dark theme is active. */
+.dark .hero-gradient {
+    background:
+        radial-gradient(circle at 82% 18%, rgba(16,185,129,.12), transparent 30%),
+        radial-gradient(circle at 8% 90%, rgba(200,155,60,.06), transparent 25%),
+        linear-gradient(135deg, #022c22 0%, #0f172a 48%, #052e2b 100%);
+}
+
+.dark .soft-card,
+.dark .category-card {
+    border-color: #334155;
+    background: rgba(15,23,42,.88);
+}
+
+.dark .hero-gradient h1,
+.dark .hero-gradient h2,
+.dark .hero-gradient h3,
+.dark .hero-gradient p,
+.dark .hero-gradient .text-slate-900,
+.dark .hero-gradient .text-slate-950 {
+    color: #f8fafc;
+}
+
+.dark .hero-gradient .text-slate-600,
+.dark .hero-gradient .text-slate-500 { color: #cbd5e1; }
+
+.dark .bg-white { background-color: #0f172a !important; }
+.dark .bg-slate-50 { background-color: #020617 !important; }
+.dark .border-slate-200 { border-color: #334155 !important; }
+.dark .text-slate-950,
+.dark .text-slate-900 { color: #f8fafc !important; }
+.dark .text-slate-700,
+.dark .text-slate-600 { color: #cbd5e1 !important; }
+.dark .text-slate-500 { color: #94a3b8 !important; }
+.dark .bg-emerald-50 { background-color: rgba(16,185,129,.12) !important; }
+.dark .bg-amber-50 { background-color: rgba(245,158,11,.12) !important; }
+.dark .bg-blue-50 { background-color: rgba(59,130,246,.12) !important; }
+.dark .bg-lime-50 { background-color: rgba(132,204,22,.12) !important; }
+.dark .bg-orange-50 { background-color: rgba(249,115,22,.12) !important; }
+
+@media (max-width: 767px) {
+    .step-line { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .slide, .hero-slider-image, .soft-card, .category-card, .btn-primary {
+        transition-duration: .01ms !important;
+    }
+}

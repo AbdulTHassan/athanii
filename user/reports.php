@@ -1,0 +1,8 @@
+<?php
+$pageTitle='My Reports'; require_once '_header.php';
+$userId=(int)$_SESSION['user_id'];
+$st=$pdo->prepare("SELECT r.*,c.status calculation_status FROM reports r JOIN zakat_calculations c ON c.id=r.calculation_id WHERE r.user_id=? ORDER BY r.generated_at DESC");$st->execute([$userId]);$reports=$st->fetchAll(PDO::FETCH_ASSOC);
+?>
+<div class="max-w-6xl mx-auto"><div class="flex justify-between items-end mb-7"><div><h1 class="text-2xl font-bold">My Reports</h1><p class="text-slate-500 text-sm mt-1">Detailed records generated from your saved calculations.</p></div></div>
+<div class="bg-white border rounded-2xl overflow-hidden"><?php if($reports):?><div class="overflow-x-auto"><table class="min-w-full text-sm"><thead class="bg-slate-50"><tr><th class="p-4 text-left">Reference</th><th class="p-4 text-left">Title</th><th class="p-4 text-left">Zakat</th><th class="p-4 text-left">Date</th><th class="p-4"></th></tr></thead><tbody class="divide-y"><?php foreach($reports as $r):?><tr><td class="p-4 font-semibold"><?=e($r['reference_no'])?></td><td class="p-4"><?=e($r['title'])?></td><td class="p-4 text-emerald-700 font-semibold"><?=money($r['total_zakat'])?></td><td class="p-4 text-slate-500"><?=date('M d, Y',strtotime($r['generated_at']))?></td><td class="p-4 text-right"><a href="report.php?id=<?=$r['id']?>" class="text-emerald-700 font-semibold">Open / Print</a></td></tr><?php endforeach;?></tbody></table></div><?php else:?><div class="p-12 text-center text-slate-500">No reports yet. Open a calculation and generate a report.</div><?php endif;?></div></div>
+<?php require_once '_footer.php'; ?>
