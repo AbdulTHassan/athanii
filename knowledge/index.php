@@ -193,7 +193,9 @@ include __DIR__ . '/../includes/header.php';
                             <article class="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900">
                                 <div class="relative h-52 overflow-hidden bg-gradient-to-br <?= $gradient ?>">
                                     <?php if (!empty($article['featured_image'])): ?>
-                                        <img src="<?= htmlspecialchars($article['featured_image']) ?>" 
+                                       
+
+                                        <img src="<?= SITE_URL . '/' . htmlspecialchars($article['featured_image']) ?>" ...
                                              alt="<?= htmlspecialchars($article['title']) ?>"
                                              class="absolute inset-0 h-full w-full object-cover opacity-70">
                                     <?php endif; ?>

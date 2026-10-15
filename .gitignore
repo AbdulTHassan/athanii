@@ -1,0 +1,19 @@
+# Database credentials
+config/database.php
+
+# Uploads
+assets/uploads/*
+!assets/uploads/.gitkeep
+
+# Test files
+test_*.php
+setup_admin.php
+fix-admin.php
+migrate.php
+create_admin.php
+hash.php
+
+# System
+.DS_Store
+Thumbs.db
+*.log
