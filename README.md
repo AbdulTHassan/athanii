@@ -1,7 +1,7 @@
 # ZakatPro — Web-Based Zakat Management System
 
 **Final Year Software Engineering Project**
-*Development of a Web-Based Zakat Management and Decision Support System for Muslims*
+*Development of a Web-Based Zakat calculation and management system*
 
 ---
 
