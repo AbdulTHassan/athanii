@@ -27,14 +27,14 @@ if (session_status() === PHP_SESSION_NONE) {
 
     session_name('ZAKATPRO_SESSION');
 
-    ini_set('session.gc_maxlifetime', '3600');
-    ini_set('session.cookie_lifetime', '0');
+   ini_set('session.gc_maxlifetime', '3600');
+    ini_set('session.gc_maxlifetime', '7200');
 
     session_start();
 }
 
-define('IDLE_TIMEOUT', 600);
-define('ABSOLUTE_TIMEOUT', 3600);
+define('IDLE_TIMEOUT', 1800);       // 30 minutes
+define('ABSOLUTE_TIMEOUT', 7200);   // 2 hours
 define('REGENERATE_INTERVAL', 1800);
 
 if (isset($_SESSION['user_id'])) {

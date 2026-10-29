@@ -1,13 +1,71 @@
 <?php
-$pageTitle='Profile'; require_once '_header.php';
-$userId=(int)$_SESSION['user_id'];$message='';$error='';$u=getUser($userId);
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/includes/auth-check.php';
+$pageTitle='My Profile';
+$uid=(int)($_SESSION['user_id']??($user['id']??0));
+function ph($x){return htmlspecialchars((string)($x??''),ENT_QUOTES,'UTF-8');}
+$notice='';$error='';
+$cols=[];
+try{$cols=array_column($pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_ASSOC),'Field');}
+catch(Throwable $e){$error='Could not read user table structure.';}
+$editable=[
+ 'phone'=>['phone','phone_number','mobile'],
+ 'address'=>['address','residential_address'],
+ 'name'=>['full_name','name']
+];
+$actual=[];
+foreach($editable as $key=>$candidates){foreach($candidates as $col){if(in_array($col,$cols,true)){$actual[$key]=$col;break;}}}
 if($_SERVER['REQUEST_METHOD']==='POST'){
- $name=trim($_POST['full_name']??'');$phone=trim($_POST['phone']??'');$lang=$_POST['language']??'en';
- if($name==='')$error='Full name is required.';else{$st=$pdo->prepare("UPDATE users SET full_name=?,phone=?,language=? WHERE id=?");$st->execute([$name,$phone,in_array($lang,['en','ha','ar'],true)?$lang:'en',$userId]);$_SESSION['user_name']=$name;$_SESSION['lang']=$lang;$message='Profile updated successfully.';$u=getUser($userId);logActivity($userId,'profile_update',$userId,'Updated profile');}
+ if(!isset($_SESSION['profile_csrf'])){$error='Session expired. Reload and try again.';}
+ elseif(!hash_equals((string)$_SESSION['profile_csrf'],(string)($_POST['csrf']??''))){$error='Invalid request token. Reload and try again.';}
+ elseif(!$uid){$error='You must log in again.';}
+ else{
+  $values=[];$set=[];
+  foreach($actual as $key=>$col){
+   $value=trim((string)($_POST[$key]??''));
+   if($key==='phone' && $value!=='' && !preg_match('/^\+?[0-9 ()-]{7,20}$/',$value)){$error='Please enter a valid phone number.';break;}
+   if($key==='name' && ($value===''||strlen($value)>120)){$error='Name is required (maximum 120 characters).';break;}
+   if($key==='address' && strlen($value)>255){$error='Address must be at most 255 characters.';break;}
+   $set[]="`$col` = ?";$values[]=$value;
+  }
+  if(!$error && $set){
+   try{
+    $values[]=$uid;
+    $stmt=$pdo->prepare('UPDATE users SET '.implode(', ',$set).' WHERE id = ?');
+    $stmt->execute($values);
+    $notice='Your profile has been updated successfully.';
+   }catch(Throwable $e){$error='Could not save changes. Please check your database configuration.';}
+  }
+ }
 }
+$_SESSION['profile_csrf']=$_SESSION['profile_csrf']??bin2hex(random_bytes(32));
+try{$stmt=$pdo->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');$stmt->execute([$uid]);$profile=$stmt->fetch(PDO::FETCH_ASSOC)?:$user;}
+catch(Throwable $e){$profile=$user;$error=$error?:'Could not load updated profile details.';}
+$labels=['name'=>'Full Name','phone'=>'Phone Number','address'=>'Address'];
 ?>
-<div class="max-w-2xl mx-auto"><div class="mb-7"><h1 class="text-2xl font-bold">Profile & Settings</h1><p class="text-slate-500 text-sm mt-1">Keep your ZakatPro account information up to date.</p></div><div class="bg-white border rounded-2xl p-6">
-<?php if($message):?><div class="mb-5 p-3 rounded-xl bg-green-50 text-green-700"><?=$message?></div><?php endif;?><?php if($error):?><div class="mb-5 p-3 rounded-xl bg-red-50 text-red-700"><?=$error?></div><?php endif;?>
-<form method="POST" class="space-y-5"><div><label class="block text-sm font-semibold mb-2">Full name</label><input name="full_name" value="<?=e($u['full_name'])?>" class="w-full border rounded-xl px-4 py-3" required></div><div><label class="block text-sm font-semibold mb-2">Email</label><input value="<?=e($u['email'])?>" disabled class="w-full border rounded-xl px-4 py-3 bg-slate-50 text-slate-500"></div><div><label class="block text-sm font-semibold mb-2">Phone</label><input name="phone" value="<?=e($u['phone']??'')?>" class="w-full border rounded-xl px-4 py-3"></div><div><label class="block text-sm font-semibold mb-2">Language</label><select name="language" class="w-full border rounded-xl px-4 py-3"><option value="en" <?=$u['language']==='en'?'selected':''?>>English</option><option value="ha" <?=$u['language']==='ha'?'selected':''?>>Hausa</option><option value="ar" <?=$u['language']==='ar'?'selected':''?>>العربية</option></select></div><button class="bg-emerald-700 text-white px-5 py-3 rounded-xl font-semibold">Save Changes</button></form>
-<div class="mt-8 pt-6 border-t"><p class="text-sm text-slate-500">Member since</p><p class="font-semibold mt-1"><?=date('M d, Y',strtotime($u['created_at']))?></p></div>
-</div></div><?php require_once '_footer.php'; ?>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Profile - KAZWAB</title><script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></head>
+<body class="bg-slate-50 text-slate-800">
+<?php require __DIR__.'/_sidebar.php'; ?>
+<div class="md:ml-64 min-h-screen flex flex-col"><?php require __DIR__.'/_header.php'; ?>
+<main class="flex-1 p-4 md:p-8"><div class="max-w-3xl mx-auto">
+<h1 class="text-2xl font-bold text-emerald-900 mb-2"><i class="fa-regular fa-user mr-2"></i>My Profile</h1>
+<p class="text-slate-500 mb-6">Update your contact details whenever they change.</p>
+<?php if($notice):?><div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl mb-5"><?=ph($notice)?></div><?php endif;?>
+<?php if($error):?><div class="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl mb-5"><?=ph($error)?></div><?php endif;?>
+<div class="bg-white border rounded-2xl overflow-hidden shadow-sm">
+<div class="bg-emerald-800 text-white p-6"><h2 class="text-xl font-bold"><?=ph($profile['full_name']??$profile['name']??'KAZWAB Donor')?></h2><p class="text-emerald-100 text-sm">Account information</p></div>
+<form method="post" class="p-6 md:p-8 space-y-5">
+<input type="hidden" name="csrf" value="<?=ph($_SESSION['profile_csrf'])?>">
+<div><label class="block text-sm font-semibold mb-2">Email Address</label><input class="w-full bg-slate-100 border rounded-xl px-4 py-3 text-slate-500" value="<?=ph($profile['email']??'')?>" readonly><p class="text-xs text-slate-500 mt-1">Email changes require account verification.</p></div>
+<?php foreach($labels as $key=>$label):if(!isset($actual[$key]))continue;$column=$actual[$key];?>
+<div><label for="<?=ph($key)?>" class="block text-sm font-semibold mb-2"><?=ph($label)?></label>
+<input id="<?=ph($key)?>" name="<?=ph($key)?>" type="<?= $key==='phone'?'tel':'text' ?>" maxlength="<?= $key==='address'?255:($key==='name'?120:20) ?>" value="<?=ph($profile[$column]??'')?>" class="w-full border border-slate-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" <?= $key==='name'?'required':'' ?>>
+</div>
+<?php endforeach;?>
+<?php if($actual):?><button type="submit" class="bg-emerald-800 hover:bg-emerald-900 text-white font-bold rounded-xl px-6 py-3"><i class="fa-solid fa-floppy-disk mr-2"></i>Save Changes</button>
+<?php else:?><p class="text-amber-700">No editable profile fields were found in the users table.</p><?php endif;?>
+</form></div>
+<p class="text-xs text-slate-500 mt-4">Password and email are not editable here for account security.</p>
+</div></main></div></body></html>

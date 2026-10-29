@@ -15,7 +15,7 @@
             <div class="flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-gray-500">
                 <p>
                     © <?php echo date('Y'); ?> 
-                    <strong class="text-gray-700"><?php echo defined('SITE_NAME') ? SITE_NAME : 'ZakatPro'; ?></strong>. 
+                    <strong class="text-gray-700"><?= e($softwareName ?? appName($pdo)) ?></strong>. 
                     All rights reserved.
                 </p>
                 <p class="flex items-center gap-2 text-xs">

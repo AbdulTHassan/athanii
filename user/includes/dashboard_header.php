@@ -337,7 +337,7 @@ $user = getCurrentUser($conn);
     <div class="flex items-center p-6 border-b border-white/10">
         <div class="logo-icon text-3xl text-white"><i class="fa-solid fa-mosque"></i></div>
         <div class="logo-text ml-3">
-            <h1 class="text-white font-bold text-xl">ZakatPro</h1>
+            <h1 class="text-white font-bold text-xl"><?= htmlspecialchars(appName($pdo), ENT_QUOTES, 'UTF-8') ?></h1>
            
         </div>
     </div>

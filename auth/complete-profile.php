@@ -1,323 +1,88 @@
 <?php
-/**
- * ZakatPro - Complete Profile
- */
-
+/** ZakatPro mandatory onboarding profile. */
+declare(strict_types=1);
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/session.php';
-
-/*
-|--------------------------------------------------------------------------
-| Require Login
-|--------------------------------------------------------------------------
-*/
-if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit;
-}
-
-$userId = (int) $_SESSION['user_id'];
-
-/*
-|--------------------------------------------------------------------------
-| CSRF Token
-|--------------------------------------------------------------------------
-*/
-if (empty($_SESSION['csrf_profile'])) {
-    $_SESSION['csrf_profile'] = bin2hex(random_bytes(32));
-}
-
+if (empty($_SESSION['user_id'])) { header('Location: login.php'); exit; }
+$userId = (int)$_SESSION['user_id'];
+if (empty($_SESSION['csrf_profile'])) $_SESSION['csrf_profile'] = bin2hex(random_bytes(32));
 $errors = [];
-
-/*
-|--------------------------------------------------------------------------
-| Get User
-|--------------------------------------------------------------------------
-*/
-$stmt = $pdo->prepare("
-    SELECT
-        id,
-        full_name,
-        email,
-        phone,
-        address,
-        city,
-        state,
-        country,
-        language,
-        profile_image
-    FROM users
-    WHERE id = ?
-    LIMIT 1
-");
-
+$stmt = $pdo->prepare('SELECT id, role_id, status, full_name, email, phone, address, city, state, country, language, profile_image, profile_completed_at FROM users WHERE id = ? LIMIT 1');
 $stmt->execute([$userId]);
-
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if (!$user) {
-    session_destroy();
-    header('Location: login.php');
-    exit;
+if (!$user || $user['status'] !== 'active' || (int)$user['role_id'] !== 2) {
+    unset($_SESSION['user_id'], $_SESSION['role'], $_SESSION['user_name'], $_SESSION['user_email'], $_SESSION['user_language']);
+    header('Location: login.php'); exit;
 }
-
-/*
-|--------------------------------------------------------------------------
-| Handle Form Submission
-|--------------------------------------------------------------------------
-*/
+if (!empty($user['profile_completed_at'])) { header('Location: ../user/dashboard.php'); exit; }
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
-    /*
-    |--------------------------------------------------------------------------
-    | CSRF Validation
-    |--------------------------------------------------------------------------
-    */
-    if (
-        empty($_POST['csrf_token']) ||
-        !hash_equals(
-            $_SESSION['csrf_profile'],
-            $_POST['csrf_token']
-        )
-    ) {
-        $errors[] = 'Invalid security token. Please refresh the page and try again.';
+    $csrf = $_POST['csrf_token'] ?? '';
+    if (!is_string($csrf) || !hash_equals($_SESSION['csrf_profile'], $csrf)) {
+        $errors[] = 'Invalid security token. Please refresh the page.';
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Get Form Values
-    |--------------------------------------------------------------------------
-    */
-    $phone = trim($_POST['phone'] ?? '');
-    $address = trim($_POST['address'] ?? '');
-    $city = trim($_POST['city'] ?? '');
-    $state = trim($_POST['state'] ?? '');
-    $country = trim($_POST['country'] ?? 'Nigeria');
-    $language = $_POST['language'] ?? 'en';
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validation
-    |--------------------------------------------------------------------------
-    */
-    if ($phone === '') {
-        $errors[] = 'Please enter your phone number.';
-    }
-
-    if ($address === '') {
-        $errors[] = 'Please enter your address.';
-    }
-
-    if ($city === '') {
-        $errors[] = 'Please enter your city.';
-    }
-
-    if ($state === '') {
-        $errors[] = 'Please enter your state or region.';
-    }
-
-    if ($country === '') {
-        $errors[] = 'Please select your country.';
-    }
-
-    $allowedLanguages = ['en', 'ha', 'ar'];
-
-    if (!in_array($language, $allowedLanguages, true)) {
-        $errors[] = 'Invalid language selected.';
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Profile Image
-    |--------------------------------------------------------------------------
-    */
+    $phone = trim((string)($_POST['phone'] ?? ''));
+    $address = trim((string)($_POST['address'] ?? ''));
+    $city = trim((string)($_POST['city'] ?? ''));
+    $state = trim((string)($_POST['state'] ?? ''));
+    $country = trim((string)($_POST['country'] ?? 'Nigeria'));
+    $language = (string)($_POST['language'] ?? 'en');
+    if (!preg_match('/^[0-9+() .-]{7,30}$/', $phone)) $errors[] = 'Enter a valid phone number (7–30 characters).';
+    if ($address === '' || mb_strlen($address) > 1000) $errors[] = 'Enter a valid address.';
+    if ($city === '' || mb_strlen($city) > 100) $errors[] = 'Enter a valid city.';
+    if ($state === '' || mb_strlen($state) > 100) $errors[] = 'Enter a valid state or region.';
+    if (!in_array($country, ['Nigeria', 'Ghana', 'United Kingdom', 'United States', 'Other'], true)) $errors[] = 'Select a valid country.';
+    if (!in_array($language, ['en', 'ha', 'ar'], true)) $errors[] = 'Select a valid language.';
     $profileImage = $user['profile_image'];
-
-    if (
-        isset($_FILES['profile_image']) &&
-        $_FILES['profile_image']['error'] !== UPLOAD_ERR_NO_FILE
-    ) {
-
-        if ($_FILES['profile_image']['error'] !== UPLOAD_ERR_OK) {
-            $errors[] = 'There was a problem uploading your profile image.';
+    $uploadedPath = null;
+    if (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] !== UPLOAD_ERR_NO_FILE) {
+        $file = $_FILES['profile_image'];
+        if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] > 2 * 1024 * 1024 || $file['size'] < 1 || !is_uploaded_file($file['tmp_name'])) {
+            $errors[] = 'Profile image upload failed or exceeds 2MB.';
         } else {
-
-            $file = $_FILES['profile_image'];
-
-            /*
-            | Maximum 2MB
-            */
-            if ($file['size'] > 2 * 1024 * 1024) {
-                $errors[] = 'Profile image must not exceed 2MB.';
-            }
-
-            /*
-            | Detect MIME type
-            */
-            $allowedMimeTypes = [
-                'image/jpeg' => 'jpg',
-                'image/png'  => 'png',
-                'image/webp' => 'webp'
-            ];
-
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mimeType = finfo_file(
-                $finfo,
-                $file['tmp_name']
-            );
-            finfo_close($finfo);
-
-            if (!isset($allowedMimeTypes[$mimeType])) {
-                $errors[] = 'Only JPG, PNG, and WEBP images are allowed.';
-            }
-
-            /*
-            | Save Image
-            */
-            if (empty($errors)) {
-
-                $extension = $allowedMimeTypes[$mimeType];
-
-                $uploadDirectory =
-                    __DIR__ . '/../assets/images/profiles/';
-
-                if (!is_dir($uploadDirectory)) {
-                    mkdir(
-                        $uploadDirectory,
-                        0755,
-                        true
-                    );
-                }
-
-                $newFileName =
-                    'profile_' .
-                    $userId .
-                    '_' .
-                    bin2hex(random_bytes(8)) .
-                    '.' .
-                    $extension;
-
-                $destination =
-                    $uploadDirectory .
-                    $newFileName;
-
-                if (
-                    move_uploaded_file(
-                        $file['tmp_name'],
-                        $destination
-                    )
-                ) {
-
-                    /*
-                    | Delete old profile image
-                    */
-                    if (!empty($user['profile_image'])) {
-
-                        $oldImage =
-                            $uploadDirectory .
-                            basename($user['profile_image']);
-
-                        if (is_file($oldImage)) {
-                            unlink($oldImage);
-                        }
-                    }
-
-                    $profileImage = $newFileName;
-
-                } else {
-
-                    $errors[] =
-                        'Unable to save the uploaded profile image.';
-                }
+            $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
+            $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+            $imageInfo = @getimagesize($file['tmp_name']);
+            if (!isset($allowed[$mime]) || !$imageInfo || $imageInfo[0] > 5000 || $imageInfo[1] > 5000) {
+                $errors[] = 'Only valid JPG, PNG, or WEBP images are allowed (maximum 5000 pixels per side).';
             }
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Update Database
-    |--------------------------------------------------------------------------
-    */
-    if (empty($errors)) {
-
-        try {
-
-            $update = $pdo->prepare("
-                UPDATE users
-                SET
-                    phone = ?,
-                    address = ?,
-                    city = ?,
-                    state = ?,
-                    country = ?,
-                    language = ?,
-                    profile_image = ?,
-                    profile_completed_at = CURRENT_TIMESTAMP,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            ");
-
-            $update->execute([
-                $phone,
-                $address,
-                $city,
-                $state,
-                $country,
-                $language,
-                $profileImage,
-                $userId
-            ]);
-
-            /*
-            |--------------------------------------------------------------------------
-            | Update Session Language
-            |--------------------------------------------------------------------------
-            */
-            $_SESSION['user_language'] = $language;
-
-            /*
-            |--------------------------------------------------------------------------
-            | Redirect To Dashboard
-            |--------------------------------------------------------------------------
-            */
-            header(
-                'Location: ../user/dashboard.php?profile=completed'
-            );
-            exit;
-
-        } catch (PDOException $e) {
-
-            $errors[] =
-                'Unable to update your profile. Please try again.';
+    if (!$errors) {
+        if (isset($file, $mime) && isset($allowed[$mime])) {
+            $uploadDir = __DIR__ . '/../assets/images/profiles/';
+            if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+                $errors[] = 'Cannot create profile image folder.';
+            } else {
+                $profileImage = 'profile_' . $userId . '_' . bin2hex(random_bytes(12)) . '.' . $allowed[$mime];
+                $uploadedPath = $uploadDir . $profileImage;
+                if (!move_uploaded_file($file['tmp_name'], $uploadedPath)) {
+                    $errors[] = 'Could not save the uploaded image.';
+                }
+            }
+        }
+        if (!$errors) {
+            try {
+                $update = $pdo->prepare('UPDATE users SET phone = ?, address = ?, city = ?, state = ?, country = ?, language = ?, profile_image = ?, profile_completed_at = NOW(), updated_at = NOW() WHERE id = ? AND role_id = 2');
+                $update->execute([$phone, $address, $city, $state, $country, $language, $profileImage, $userId]);
+                $_SESSION['user_language'] = $language;
+                unset($_SESSION['csrf_profile']);
+                header('Location: ../user/dashboard.php?profile=completed'); exit;
+            } catch (PDOException $e) {
+                error_log('ZakatPro profile update: ' . $e->getMessage());
+                if ($uploadedPath && is_file($uploadedPath)) unlink($uploadedPath);
+                $errors[] = 'Unable to update your profile. Please try again.';
+            }
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Keep Submitted Values
-    |--------------------------------------------------------------------------
-    */
     $user['phone'] = $phone;
     $user['address'] = $address;
     $user['city'] = $city;
     $user['state'] = $state;
     $user['country'] = $country;
     $user['language'] = $language;
-    $user['profile_image'] = $profileImage;
 }
-
-/*
-|--------------------------------------------------------------------------
-| Escape Helper
-|--------------------------------------------------------------------------
-*/
-function e($value)
-{
-    return htmlspecialchars(
-        (string) $value,
-        ENT_QUOTES,
-        'UTF-8'
-    );
+function e($value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 ?>
 
@@ -746,13 +511,6 @@ function e($value)
 
                 <!-- Bottom Actions -->
                 <div class="mt-7 pt-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-
-                    <a
-                        href="../user/dashboard.php"
-                        class="text-sm text-slate-500 hover:text-slate-800 transition"
-                    >
-                        Skip for now
-                    </a>
 
                     <button
                         type="submit"

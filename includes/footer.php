@@ -47,7 +47,7 @@
                     <span
                         class="text-lg font-extrabold tracking-tight text-emerald-700"
                     >
-                        ZAKKATPRO
+                        <?= htmlspecialchars($softwareName ?? 'ZakatPro', ENT_QUOTES, 'UTF-8') ?>
                     </span>
 
                 </a>
@@ -167,7 +167,7 @@
                 <h3
                     class="text-sm font-bold text-slate-900 dark:text-white"
                 >
-                    ZAKKATPRO
+                    <?= htmlspecialchars($softwareName ?? 'ZakatPro', ENT_QUOTES, 'UTF-8') ?>
                 </h3>
 
                 <p
@@ -198,7 +198,7 @@
             <p
                 class="text-xs text-slate-500 dark:text-slate-400"
             >
-                © <?= date('Y') ?> ZAKKATPRO. All rights reserved.
+                © <?= date('Y') ?> <?= htmlspecialchars($softwareName ?? 'ZakatPro', ENT_QUOTES, 'UTF-8') ?>. All rights reserved.
             </p>
 
             <div

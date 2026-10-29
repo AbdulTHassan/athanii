@@ -13,8 +13,8 @@ $offset = ($page - 1) * $perPage;
 
 // ============ STATS ============
 $totalCalcs      = countRows($pdo, 'zakat_calculations');
-$draftCalcs      = countRows($pdo, 'zakat_calculations', "status = 'draft'");
-$submittedCalcs  = countRows($pdo, 'zakat_calculations', "status = 'submitted'");
+$draftCalcs      = countRows($pdo, 'zakat_calculations', "status IN ('draft','calculated','saved')");
+$submittedCalcs  = countRows($pdo, 'zakat_calculations', "status IN ('submitted','under_review')");
 $approvedCalcs   = countRows($pdo, 'zakat_calculations', "status = 'approved'");
 
 $totalZakat = 0;
@@ -163,7 +163,9 @@ require_once __DIR__ . '/../../includes/admin_header.php';
                 class="px-4 py-2.5 border border-gray-200 rounded-lg text-sm
                        focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <option value="">All Statuses</option>
+            <option value="calculated" <?= $status === 'calculated' ? 'selected' : '' ?>>Calculated</option>
             <option value="draft" <?= $status === 'draft' ? 'selected' : '' ?>>Draft</option>
+            <option value="under_review" <?= $status === 'under_review' ? 'selected' : '' ?>>Under Review</option>
             <option value="submitted" <?= $status === 'submitted' ? 'selected' : '' ?>>Submitted</option>
             <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>Approved</option>
             <option value="rejected" <?= $status === 'rejected' ? 'selected' : '' ?>>Rejected</option>

@@ -1,310 +1,77 @@
 <?php
-/**
- * ZakatPro
- * Public User Registration
- *
- * File:
- * C:\xampp\htdocs\athanii\auth\register.php
- *
- * Public registration always creates a normal User account.
- * Admin and Super Admin accounts are created internally.
- */
-
+/** ZakatPro public registration: creates normal users only. */
+declare(strict_types=1);
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/session.php';
-
-/*
-|--------------------------------------------------------------------------
-| CSRF TOKEN
-|--------------------------------------------------------------------------
-*/
-
-if (empty($_SESSION['csrf_register'])) {
-    $_SESSION['csrf_register'] = bin2hex(random_bytes(32));
-}
-
-/*
-|--------------------------------------------------------------------------
-| VARIABLES
-|--------------------------------------------------------------------------
-*/
-
+if (empty($_SESSION['csrf_register'])) $_SESSION['csrf_register'] = bin2hex(random_bytes(32));
 $error = '';
-
 $fullName = '';
 $email = '';
-
-/*
-|--------------------------------------------------------------------------
-| ESCAPE FUNCTION
-|--------------------------------------------------------------------------
-*/
-
-function registerEscape($value)
-{
-    return htmlspecialchars(
-        (string) $value,
-        ENT_QUOTES,
-        'UTF-8'
-    );
+function registerEscape($value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
-
-/*
-|--------------------------------------------------------------------------
-| IF ALREADY LOGGED IN
-|--------------------------------------------------------------------------
-*/
-
-if (!empty($_SESSION['user_id']) && !empty($_SESSION['role'])) {
-
-    $roleId = (int) $_SESSION['role'];
-
-    if ($roleId === 1 || $roleId === 3) {
-        header('Location: ../admin/dashboard.php');
-        exit;
+if (!empty($_SESSION['user_id'])) {
+    $q = $pdo->prepare('SELECT id, role_id, status, profile_completed_at FROM users WHERE id = ? LIMIT 1');
+    $q->execute([(int)$_SESSION['user_id']]);
+    $account = $q->fetch();
+    if ($account && $account['status'] === 'active') {
+        $role = (int)$account['role_id'];
+        if (in_array($role, [1, 7], true)) { header('Location: ../admin/dashboard.php'); exit; }
+        if ($role === 2) {
+            header('Location: ' . (empty($account['profile_completed_at']) ? 'complete-profile.php' : '../user/dashboard.php'));
+            exit;
+        }
     }
-
-    if ($roleId === 2) {
-        header('Location: ../user/dashboard.php');
-        exit;
-    }
+    unset($_SESSION['user_id'], $_SESSION['role'], $_SESSION['user_name'], $_SESSION['user_email'], $_SESSION['user_language']);
 }
-
-/*
-|--------------------------------------------------------------------------
-| REGISTRATION PROCESS
-|--------------------------------------------------------------------------
-*/
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
-    /*
-    |--------------------------------------------------------------------------
-    | CSRF
-    |--------------------------------------------------------------------------
-    */
-
-    $csrfToken = $_POST['csrf_token'] ?? '';
-
-    if (
-        empty($csrfToken) ||
-        empty($_SESSION['csrf_register']) ||
-        !hash_equals(
-            $_SESSION['csrf_register'],
-            $csrfToken
-        )
-    ) {
-
-        $error =
-            'Your session has expired. Please refresh the page and try again.';
-
+    $csrf = $_POST['csrf_token'] ?? '';
+    if (!is_string($csrf) || !hash_equals($_SESSION['csrf_register'], $csrf)) {
+        $error = 'Your session has expired. Please refresh the page and try again.';
     } else {
-
-        /*
-        |--------------------------------------------------------------------------
-        | FORM DATA
-        |--------------------------------------------------------------------------
-        */
-
-        $fullName = trim($_POST['full_name'] ?? '');
-        $email = trim($_POST['email'] ?? '');
+        $fullName = trim((string)($_POST['full_name'] ?? ''));
+        $email = trim((string)($_POST['email'] ?? ''));
         $password = $_POST['password'] ?? '';
-        $confirmPassword = $_POST['confirm_password'] ?? '';
-
-        /*
-        |--------------------------------------------------------------------------
-        | VALIDATION
-        |--------------------------------------------------------------------------
-        */
-
-        if ($fullName === '') {
-
-            $error = 'Please enter your full name.';
-
-        } elseif (mb_strlen($fullName) < 2) {
-
-            $error = 'Your full name must contain at least 2 characters.';
-
-        } elseif (mb_strlen($fullName) > 150) {
-
-            $error = 'Your full name is too long.';
-
-        } elseif ($email === '') {
-
-            $error = 'Please enter your email address.';
-
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-
+        $confirm = $_POST['confirm_password'] ?? '';
+        if (mb_strlen($fullName) < 2 || mb_strlen($fullName) > 150) {
+            $error = 'Full name must contain between 2 and 150 characters.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 150) {
             $error = 'Please enter a valid email address.';
-
-        } elseif (mb_strlen($email) > 150) {
-
-            $error = 'Your email address is too long.';
-
-        } elseif ($password === '') {
-
-            $error = 'Please create a password.';
-
-        } elseif (strlen($password) < 8) {
-
-            $error =
-                'Your password must contain at least 8 characters.';
-
-        } elseif ($confirmPassword === '') {
-
-            $error = 'Please confirm your password.';
-
-        } elseif ($password !== $confirmPassword) {
-
+        } elseif (!is_string($password) || strlen($password) < 8) {
+            $error = 'Password must contain at least 8 characters.';
+        } elseif (!is_string($confirm) || $password !== $confirm) {
             $error = 'The passwords do not match.';
-
         } elseif (empty($_POST['terms'])) {
-
-            $error =
-                'Please accept the terms and conditions to continue.';
-
+            $error = 'Please accept the terms and conditions.';
         } else {
-
             try {
-
-                /*
-                |--------------------------------------------------------------------------
-                | CHECK EXISTING EMAIL
-                |--------------------------------------------------------------------------
-                */
-
-                $check = $pdo->prepare("
-                    SELECT id
-                    FROM users
-                    WHERE email = ?
-                    LIMIT 1
-                ");
-
-                $check->execute([$email]);
-
-                if ($check->fetch()) {
-
-                    $error =
-                        'An account with this email address already exists.';
-
+                $q = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+                $q->execute([$email]);
+                if ($q->fetch()) {
+                    $error = 'An account with this email address already exists.';
                 } else {
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | PASSWORD HASH
-                    |--------------------------------------------------------------------------
-                    */
-
-                    $hashedPassword = password_hash(
-                        $password,
-                        PASSWORD_DEFAULT
-                    );
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | CREATE NORMAL USER
-                    |--------------------------------------------------------------------------
-                    |
-                    | role_id = 2
-                    |
-                    */
-
-                    $stmt = $pdo->prepare("
-                        INSERT INTO users (
-                            role_id,
-                            full_name,
-                            email,
-                            password,
-                            language,
-                            status
-                        )
-                        VALUES (
-                            2,
-                            ?,
-                            ?,
-                            ?,
-                            'en',
-                            'active'
-                        )
-                    ");
-
-                    $stmt->execute([
-                        $fullName,
-                        $email,
-                        $hashedPassword
-                    ]);
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | GET CREATED USER
-                    |--------------------------------------------------------------------------
-                    */
-
-                    $userId = (int) $pdo->lastInsertId();
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | LOGIN USER
-                    |--------------------------------------------------------------------------
-                    |
-                    | For the current stage, account creation immediately
-                    | signs the user in.
-                    |
-                    | Email verification can be added in the next stage
-                    | after the required database fields are introduced.
-                    |
-                    */
-
+                    $q = $pdo->prepare("INSERT INTO users (role_id, full_name, email, password, language, status) VALUES (2, ?, ?, ?, 'en', 'active')");
+                    $q->execute([$fullName, $email, password_hash($password, PASSWORD_DEFAULT)]);
+                    $id = (int)$pdo->lastInsertId();
                     session_regenerate_id(true);
-
-                    $_SESSION['user_id'] = $userId;
+                    $_SESSION['user_id'] = $id;
                     $_SESSION['role'] = 2;
                     $_SESSION['user_name'] = $fullName;
                     $_SESSION['user_email'] = $email;
                     $_SESSION['user_language'] = 'en';
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | REDIRECT TO PROFILE COMPLETION
-                    |--------------------------------------------------------------------------
-                    */
-
-                    header(
-                        'Location: complete-profile.php'
-                    );
-
+                    header('Location: complete-profile.php');
                     exit;
                 }
-
             } catch (PDOException $e) {
-
-                /*
-                |--------------------------------------------------------------------------
-                | LOG REAL ERROR
-                |--------------------------------------------------------------------------
-                */
-
-                error_log(
-                    'ZakatPro Registration Error: ' .
-                    $e->getMessage()
-                );
-
-                /*
-                |--------------------------------------------------------------------------
-                | USER-FRIENDLY MESSAGE
-                |--------------------------------------------------------------------------
-                */
-
-                $error =
-                    'We could not create your account right now. Please try again later.';
+                error_log('ZakatPro registration: ' . $e->getMessage());
+                $error = 'We could not create your account right now. Please try again later.';
             }
         }
     }
 }
-
 $pageTitle = 'Create Account';
-
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 

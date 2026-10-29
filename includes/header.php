@@ -64,6 +64,13 @@ if (!function_exists('app_url')) {
 
 require_once __DIR__ . '/functions.php';
 
+// Shared software name, configured by Admin.
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    require_once __DIR__ . '/../config/config.php';
+}
+require_once __DIR__ . '/app_settings.php';
+$softwareName = appName($pdo);
+
 ?>
 
 <!DOCTYPE html>
@@ -80,10 +87,10 @@ require_once __DIR__ . '/functions.php';
 
     <meta
         name="description"
-        content="ZAKKATPRO - A comprehensive digital platform for understanding, calculating, managing and keeping reliable records of Zakat."
+        content="<?= htmlspecialchars($softwareName, ENT_QUOTES, 'UTF-8') ?> - A comprehensive digital platform for understanding, calculating, managing and keeping reliable records of Zakat."
     >
 
-    <title>ZAKKATPRO</title>
+    <title><?= htmlspecialchars($pageTitle ?? $softwareName, ENT_QUOTES, 'UTF-8') ?></title>
 
     <!-- Google Fonts -->
     <link
@@ -183,7 +190,7 @@ require_once __DIR__ . '/functions.php';
                 <span
                     class="block text-lg font-extrabold tracking-tight text-emerald-700"
                 >
-                    ZAKKATPRO
+                    <?= htmlspecialchars($softwareName, ENT_QUOTES, 'UTF-8') ?>
                 </span>
 
                 <span

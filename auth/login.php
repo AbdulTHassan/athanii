@@ -1,293 +1,93 @@
 <?php
-/**
- * ZakatPro - Secure Unified Login
- *
- * File:
- * C:\xampp\htdocs\athanii\auth\login.php
- *
- * Login is shared by:
- * - User
- * - Admin
- * - Super Admin
- *
- * Role is determined from the database.
- */
-
+/** ZakatPro unified login. Public registration never grants admin roles. */
+declare(strict_types=1);
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/session.php';
-
-/*
-|--------------------------------------------------------------------------
-| CSRF TOKEN
-|--------------------------------------------------------------------------
-*/
 
 if (empty($_SESSION['csrf_login'])) {
     $_SESSION['csrf_login'] = bin2hex(random_bytes(32));
 }
-
-/*
-|--------------------------------------------------------------------------
-| VARIABLES
-|--------------------------------------------------------------------------
-*/
-
 $error = '';
 $success = '';
-
 $email = '';
-
-/*
-|--------------------------------------------------------------------------
-| HELPER FUNCTIONS
-|--------------------------------------------------------------------------
-*/
-
-function loginEscape($value)
-{
-    return htmlspecialchars(
-        (string)$value,
-        ENT_QUOTES,
-        'UTF-8'
-    );
+function loginEscape($value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
-
-/*
-|--------------------------------------------------------------------------
-| ALREADY LOGGED IN
-|--------------------------------------------------------------------------
-|
-| If a user is already authenticated, don't show the login page again.
-|
-*/
-
-if (!empty($_SESSION['user_id']) && !empty($_SESSION['role'])) {
-
-    $roleId = (int) $_SESSION['role'];
-
-    if ($roleId === 1 || $roleId === 3) {
-        header('Location: ../admin/dashboard.php');
-        exit;
-    }
-
-    if ($roleId === 2) {
-        header('Location: ../user/dashboard.php');
-        exit;
-    }
-
-    // Unknown role
-    $_SESSION = [];
+function loginDestination(int $roleId): ?string {
+    if (in_array($roleId, [1, 7], true)) return '../admin/dashboard.php';
+    if ($roleId === 2) return '../user/dashboard.php';
+    return null; // Other staff roles require their own permission-scoped route.
 }
-
-/*
-|--------------------------------------------------------------------------
-| LOGIN PROCESS
-|--------------------------------------------------------------------------
-*/
-
+function loginProfileNeeded(PDO $pdo, int $id): bool {
+    $q = $pdo->prepare('SELECT profile_completed_at FROM users WHERE id = ? LIMIT 1');
+    $q->execute([$id]);
+    return !$q->fetchColumn();
+}
+// Never trust a stale role stored in the session.
+if (!empty($_SESSION['user_id'])) {
+    $q = $pdo->prepare('SELECT id, role_id, status FROM users WHERE id = ? LIMIT 1');
+    $q->execute([(int)$_SESSION['user_id']]);
+    $account = $q->fetch();
+    if ($account && $account['status'] === 'active') {
+        $destination = loginDestination((int)$account['role_id']);
+        if ($destination !== null) {
+            if ((int)$account['role_id'] === 2 && loginProfileNeeded($pdo, (int)$account['id'])) {
+                $destination = 'complete-profile.php';
+            }
+            header('Location: ' . $destination);
+            exit;
+        }
+    }
+    unset($_SESSION['user_id'], $_SESSION['role'], $_SESSION['user_name'], $_SESSION['user_email'], $_SESSION['user_language']);
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
-    /*
-    |--------------------------------------------------------------------------
-    | CSRF VALIDATION
-    |--------------------------------------------------------------------------
-    */
-
-    $csrfToken = $_POST['csrf_token'] ?? '';
-
-    if (
-        empty($csrfToken) ||
-        empty($_SESSION['csrf_login']) ||
-        !hash_equals($_SESSION['csrf_login'], $csrfToken)
-    ) {
-        $error = 'Your session has expired. Please refresh the page and try again.';
+    $csrf = $_POST['csrf_token'] ?? '';
+    if (!is_string($csrf) || !hash_equals($_SESSION['csrf_login'], $csrf)) {
+        $error = 'Your session has expired. Please refresh and try again.';
     } else {
-
-        /*
-        |--------------------------------------------------------------------------
-        | GET FORM DATA
-        |--------------------------------------------------------------------------
-        */
-
-        $email = trim($_POST['email'] ?? '');
+        $email = trim((string)($_POST['email'] ?? ''));
         $password = $_POST['password'] ?? '';
-
-        /*
-        |--------------------------------------------------------------------------
-        | BASIC VALIDATION
-        |--------------------------------------------------------------------------
-        */
-
-        if ($email === '') {
-
-            $error = 'Please enter your email address.';
-
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-
-            $error = 'Please enter a valid email address.';
-
-        } elseif ($password === '') {
-
-            $error = 'Please enter your password.';
-
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || !is_string($password) || $password === '') {
+            $error = 'Invalid email or password.';
         } else {
-
             try {
-
-                /*
-                |--------------------------------------------------------------------------
-                | FIND USER
-                |--------------------------------------------------------------------------
-                */
-
-                $stmt = $pdo->prepare("
-                    SELECT
-                        id,
-                        role_id,
-                        full_name,
-                        email,
-                        password,
-                        language,
-                        status
-                    FROM users
-                    WHERE email = ?
-                    LIMIT 1
-                ");
-
-                $stmt->execute([$email]);
-
-                $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-                /*
-                |--------------------------------------------------------------------------
-                | CHECK ACCOUNT
-                |--------------------------------------------------------------------------
-                */
-
-                if (!$user) {
-
-                    // Same generic message for security.
+                $q = $pdo->prepare('SELECT id, role_id, full_name, email, password, language, status FROM users WHERE email = ? LIMIT 1');
+                $q->execute([$email]);
+                $account = $q->fetch();
+                if (!$account || !password_verify($password, (string)$account['password'])) {
                     $error = 'Invalid email or password.';
-
-                } elseif (
-                    isset($user['status']) &&
-                    strtolower($user['status']) !== 'active'
-                ) {
-
-                    $error = 'Your account is currently inactive. Please contact support.';
-
-                } elseif (
-                    empty($user['password']) ||
-                    !password_verify($password, $user['password'])
-                ) {
-
-                    $error = 'Invalid email or password.';
-
+                } elseif ($account['status'] !== 'active') {
+                    $error = 'Your account is inactive. Please contact support.';
                 } else {
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | SUCCESSFUL LOGIN
-                    |--------------------------------------------------------------------------
-                    */
-
-                    session_regenerate_id(true);
-
-                    $_SESSION['user_id'] = (int) $user['id'];
-                    $_SESSION['role'] = (int) $user['role_id'];
-                    $_SESSION['user_name'] = $user['full_name'];
-                    $_SESSION['user_email'] = $user['email'];
-                    $_SESSION['user_language'] = $user['language'] ?? 'en';
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | REDIRECT BASED ON ROLE
-                    |--------------------------------------------------------------------------
-                    |
-                    | Role 1 = Super Admin
-                    | Role 2 = User
-                    | Role 3 = Admin
-                    |
-                    | We don't expose these roles on the login page.
-                    |
-                    */
-
-                    $roleId = (int) $user['role_id'];
-
-                    if ($roleId === 1 || $roleId === 3) {
-
-                        header('Location: ../admin/dashboard.php');
-                        exit;
-
-                    } elseif ($roleId === 2) {
-
-                        header('Location: ../user/dashboard.php');
-                        exit;
-
+                    $roleId = (int)$account['role_id'];
+                    $destination = loginDestination($roleId);
+                    if ($destination === null) {
+                        $error = 'Your account role does not have a login destination yet. Please contact support.';
                     } else {
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | UNKNOWN ROLE
-                        |--------------------------------------------------------------------------
-                        |
-                        | If an unexpected role exists, don't allow access.
-                        |
-                        */
-
-                        $_SESSION = [];
-
-                        if (ini_get('session.use_cookies')) {
-
-                            $params = session_get_cookie_params();
-
-                            setcookie(
-                                session_name(),
-                                '',
-                                time() - 42000,
-                                $params['path'],
-                                $params['domain'],
-                                $params['secure'],
-                                $params['httponly']
-                            );
+                        if ($roleId === 2 && loginProfileNeeded($pdo, (int)$account['id'])) {
+                            $destination = 'complete-profile.php';
                         }
-
-                        session_destroy();
-
-                        $error = 'Your account role is not configured correctly. Please contact support.';
+                        session_regenerate_id(true);
+                        $_SESSION['user_id'] = (int)$account['id'];
+                        $_SESSION['role'] = $roleId;
+                        $_SESSION['user_name'] = $account['full_name'];
+                        $_SESSION['user_email'] = $account['email'];
+                        $_SESSION['user_language'] = $account['language'] ?? 'en';
+                        $pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = ?')->execute([(int)$account['id']]);
+                        header('Location: ' . $destination);
+                        exit;
                     }
                 }
-
             } catch (PDOException $e) {
-
-                /*
-                |--------------------------------------------------------------------------
-                | DATABASE ERROR
-                |--------------------------------------------------------------------------
-                |
-                | Don't expose database details to the user.
-                |
-                */
-
-                error_log(
-                    'ZakatPro Login Database Error: ' .
-                    $e->getMessage()
-                );
-
+                error_log('ZakatPro login: ' . $e->getMessage());
                 $error = 'A system error occurred. Please try again later.';
             }
         }
     }
 }
-
-/*
-|--------------------------------------------------------------------------
-| PAGE TITLE
-|--------------------------------------------------------------------------
-*/
-
 $pageTitle = 'Sign In';
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 

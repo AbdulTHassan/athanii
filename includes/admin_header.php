@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__ . '/app_settings.php';
+$softwareName = appName($pdo);
+
 if (!isset($pageTitle)) {
     $pageTitle = 'Admin Dashboard';
 }
@@ -25,7 +28,7 @@ function isNavActive(string $page, string $currentPage, string $currentDir): boo
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title><?= e($pageTitle) ?> | ZakatPro Admin</title>
+    <title><?= e($pageTitle) ?> | <?= e($softwareName) ?> Admin</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -78,7 +81,7 @@ function isNavActive(string $page, string $currentPage, string $currentDir): boo
             </div>
 
             <div>
-                <h1 class="font-bold text-lg">ZakatPro</h1>
+                <h1 class="font-bold text-lg"><?= e($softwareName) ?></h1>
                 <p class="text-xs text-emerald-200">Administration</p>
             </div>
 
@@ -270,7 +273,7 @@ function isNavActive(string $page, string $currentPage, string $currentDir): boo
                     </h2>
 
                     <p class="text-sm text-gray-500 hidden sm:block">
-                        ZakatPro Administration Panel
+                        <?= e($softwareName) ?> Administration Panel
                     </p>
                 </div>
 

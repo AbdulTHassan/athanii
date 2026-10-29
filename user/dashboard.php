@@ -4,6 +4,16 @@ $pageTitle = 'Dashboard';
 require_once __DIR__ . '/includes/auth-check.php';
 
 $myCalcs = getUserCalculations($user['id'], 4);
+// A saved calculation is not a verified payment or collection.
+$summaryStmt = $pdo->prepare("SELECT COUNT(*) AS total_calculations, COALESCE(SUM(zakat_due),0) AS calculated_zakat, SUM(CASE WHEN status IN ('calculated','saved','draft','submitted','under_review') THEN 1 ELSE 0 END) AS awaiting_review FROM zakat_calculations WHERE user_id = ?");
+$summaryStmt->execute([(int)$user['id']]);
+$summary = $summaryStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+$totalCalculations = (int)($summary['total_calculations'] ?? 0);
+$calculatedZakat = (float)($summary['calculated_zakat'] ?? 0);
+$awaitingReview = (int)($summary['awaiting_review'] ?? 0);
+$verifiedPaymentStmt = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM zakat_payments WHERE user_id=? AND status IN ('confirmed','approved')");
+$verifiedPaymentStmt->execute([(int)$user['id']]);
+$verifiedCash = (float)$verifiedPaymentStmt->fetchColumn();
 $today = date('d F Y');
 $todayDay = date('l');
 ?>
@@ -50,19 +60,19 @@ $todayDay = date('l');
                         <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mb-3">
                             <i class="fas fa-calculator text-green-700"></i>
                         </div>
-                        <p class="text-xs text-gray-500 font-medium"><?php _e('active_calculation'); ?></p>
+                        <p class="text-xs text-gray-500 font-medium">Total Calculations</p>
                         <p class="text-2xl font-bold text-gray-800 mt-1">
-                            <?php echo $activeCalculation ? 1 : 0; ?>
+                            <?php echo $totalCalculations; ?>
                         </p>
-                        <p class="text-xs text-green-600 mt-1"><?php _e('in_progress'); ?></p>
+                        <p class="text-xs text-green-600 mt-1"><?php echo $awaitingReview; ?> awaiting review</p>
                     </div>
                     <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
                         <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center mb-3">
                             <i class="fas fa-coins text-yellow-600"></i>
                         </div>
-                        <p class="text-xs text-gray-500 font-medium"><?php _e('total_zakat_due'); ?></p>
-                        <p class="text-xl font-bold text-gray-800 mt-1"><?php echo money($totalZakatDue); ?></p>
-                        <p class="text-xs text-yellow-600 mt-1"><?php _e('across'); ?> <?php echo $counts['approved'] ?? 0; ?> <?php _e('calculation'); ?></p>
+                        <p class="text-xs text-gray-500 font-medium">Calculated Zakat (not paid)</p>
+                        <p class="text-xl font-bold text-gray-800 mt-1"><?php echo money($calculatedZakat); ?></p>
+                        <p class="text-xs text-yellow-600 mt-1">Across <?php echo $totalCalculations; ?> calculations</p>
                     </div>
                     <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
                         <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mb-3">
@@ -86,6 +96,7 @@ $todayDay = date('l');
                     </div>
                 </div>
                 
+                <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900">Verified cash received: <strong><?php echo money($verifiedCash); ?></strong>. Calculated Zakat is a declaration, not proof of payment or physical collection.</div>
                 <!-- Recent Calculations -->
                 <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
                     <div class="p-5 border-b flex justify-between items-center">
@@ -115,7 +126,7 @@ $todayDay = date('l');
                                 <tr class="hover:bg-gray-50">
                                     <td class="px-5 py-3 font-mono text-xs"><?php echo e($c['reference_no']); ?></td>
                                     <td class="px-5 py-3 text-right font-bold text-green-700"><?php echo money($c['zakat_due']); ?></td>
-                                    <td class="px-5 py-3 text-center"><?php echo statusBadge($c['status']); ?></td>
+                                    <td class="px-5 py-3 text-center"><span class="inline-block rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700"><?php echo e(ucwords(str_replace('_', ' ', (string)$c['status']))); ?></span></td>
                                     <td class="px-5 py-3 text-center">
                                         <a href="calculation-view.php?id=<?php echo $c['id']; ?>" 
                                            class="text-xs text-green-700 border border-green-200 rounded-lg px-3 py-1 hover:bg-green-50">

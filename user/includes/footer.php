@@ -5,7 +5,7 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
             <!-- Brand -->
             <div>
-                <h3 class="text-xl font-bold text-green-400">Zakat System</h3>
+                <h3 class="text-xl font-bold text-green-400"><?= htmlspecialchars(appName($pdo), ENT_QUOTES, 'UTF-8') ?></h3>
                 <p class="mt-2 text-sm text-gray-400">
                     Helping Muslims fulfill their duty of Zakat with accurate calculations and Islamic guidance.
                 </p>
